@@ -12,7 +12,10 @@ var rimraf = require('rimraf');
 var BlankObject = require('blank-object');
 var heimdall = require('heimdalljs');
 var existsSync = require('exists-sync');
-var symlinkOrCopy = require('symlink-or-copy');
+//var symlinkOrCopy = require('symlink-or-copy');
+var chompPathSep = require('fs-tree-diff/lib/util').chompPathSep;
+var symlink = require('fs-tree-diff/lib/util').symlink;
+
 
 function ApplyPatchesSchema() {
   this.mkdir = 0;
@@ -59,7 +62,7 @@ function Funnel(inputNode, _options) {
     needsCache: false,
     fsFacade: true,
   });
-
+  this._origOptions = _options;
   this._includeFileCache = makeDictionary();
   this._destinationPathCache = makeDictionary();
   this._currentTree = new FSTree();
@@ -102,8 +105,8 @@ function Funnel(inputNode, _options) {
   this._setupFilter('exclude');
 
   this._matchedWalk = this.include && this.include.filter(function(a) {
-    return a instanceof Minimatch;
-  }).length === this.include.length;
+        return a instanceof Minimatch;
+      }).length === this.include.length;
 
   this._instantiatedStack = (new Error()).stack;
   this._buildStart = undefined;
@@ -156,16 +159,32 @@ Funnel.prototype.__supportsFSFacade = true;
 
 Funnel.prototype.shouldLinkRoots = function() {
   return !this.files && !this.include && !this.exclude && !this.getDestinationPath;
+  //return !this.files && !this.include && !this.exclude && !this.getDestinationPath && this.srcDir === "/";
 };
 
 Funnel.prototype.build = function() {
-  this._buildStart = new Date();
-  this.destPath = path.join(this.outputPath, this.destDir);
+  const options = {
+    parent: this.in[0],
+    cwd: this.cwd,
+    files: this.files,
+    include: this._origInclude,
+    exclude: this._origExclude,
+    srcTree: this.in[0].srcTree,
+  };
 
+  console.log('***** options *****')
+  console.log(options)
+
+  this._buildStart = new Date();
+
+  this.destPath = path.join(this.outputPath, this.destDir);
+  console.log('***** this.destPath')
+  console.log(this.destPath)
   if (this.destPath[this.destPath.length -1] === '/') {
     this.destPath = this.destPath.slice(0, -1);
   }
 
+  // TODO: should not allowEmpty by default, take allowEmpty from options
   if (this.srcDir) {
     this.in[0] = this.in[0].chdir(this.srcDir, {
       allowEmpty: true
@@ -183,6 +202,7 @@ Funnel.prototype.build = function() {
       this._includeFileCache = makeDictionary();
     }
   }
+
 
   var linkedRoots = false;
   // TODO: root linking is basically a projection
@@ -208,7 +228,10 @@ Funnel.prototype.build = function() {
      * specifying `this.allowEmpty`.
      */
 
-    let inputPathExists = this.in[0].existsSync('.');
+        // TODO: remove?
+    //let inputPathExists = this.in[0].existsSync('.');
+    let inputPathExists = existsSync('.');
+
 
     // This is specifically looking for broken symlinks.
     var outputPathExists = existsSync(this.outputPath);
@@ -233,7 +256,6 @@ Funnel.prototype.build = function() {
       if (inputPathExists) {
         // We don't want to use the generated-for-us folder.
         // Instead let's remove it:
-        rimraf.sync(this.outputPath);
         // And then symlinkOrCopy over top of it:
         // TODO: change tracking.  In principle we could enable support for
         //  `this.out.symlinkSync(this.in[0].resolvePath('.'), '.'`)`
@@ -241,7 +263,34 @@ Funnel.prototype.build = function() {
         //  however it makes fstree a bit more complicated, and when we have
         //  change tracking linkRoots will just be replaced by making this.out a
         //  projection of this.in[0] (via chdir and globs)
-        this._copy(absoluteInputPath, this.destPath);
+
+
+        if (chompPathSep(this.destPath) === this.outputPath) {
+
+          rimraf.sync(this.outputPath);
+
+         // this._copy(absoluteInputPath, this.destPath);
+          symlink(absoluteInputPath, this.destPath);
+
+          this.out.parent = this.in[0];
+
+          if (this.destDir) {
+            this.out = this.out.chdir(this.destDir, {
+              allowEmpty: true
+            });
+          }
+
+        } else {
+
+          // let destdirectory = chompPathSep(this.destDir)
+          // when symlinking, the last directory in destpath shd not be existing. So creating all paths until that.
+          // let path = destdirectory.substring(0, destdirectory.lastIndexOf("/"));
+          // mkdirp.sync(this.outputPath + "/" + path);
+
+          this.out.symlinkSyncFromInput(this.in[0], absoluteInputPath, this.destDir)
+        }
+
+
       } else if (!inputPathExists && this.allowEmpty) {
         // Can't symlink nothing, so make an empty folder at `destPath`:
         mkdirp.sync(this.destPath);
@@ -276,6 +325,46 @@ Funnel.prototype.build = function() {
     destPath: this.destPath
   });
 };
+
+
+function replacePathInEntries(fsTree, srcPath, destPath) {
+  if(fsTree.__hasEntries) {
+    if(destPath == "/") {
+      destPath  = "";
+    } else {
+      destPath  = destPath + "/";
+    }
+
+    let indexToRemove = -1;
+
+     fsTree.entries.forEach( (entry, index) => {
+
+       if(srcPath == "/") {
+         entry.relativePath = destPath  + entry.relativePath;
+       } else {
+         entry.relativePath = entry.relativePath.replace(srcPath, destPath);
+       }
+        //TODO:remove leading '/' ?
+       if(entry.relativePath == "" ) {
+         indexToRemove = index;
+       }
+    })
+
+    if(indexToRemove != -1) {
+      fsTree.entries.splice(indexToRemove, 1);
+    }
+  }
+
+
+   if(destPath !== "") {
+     fsTree.entries.unshift({
+       mode: 16877, relativePath: destPath, size: 0, mtime: Date.now(), checksum: null,
+     });
+   }
+
+  return fsTree;
+}
+
 
 function ensureRelative(string) {
   if (string.charAt(0) === '/') {
@@ -338,10 +427,10 @@ Funnel.prototype._processPatches = function(patches) {
 
     // TODO: Add tests for this
     /* Here, we are adding entries to mkdirp paths that lookupDestinationPath adds to the entry.
-       eg. relativePath = a.js
-           this.lookupDestinationPath(relativePath) returns c/b/a.js
-           we need to mkdirp c/b
-    */
+     eg. relativePath = a.js
+     this.lookupDestinationPath(relativePath) returns c/b/a.js
+     we need to mkdirp c/b
+     */
     if (patch[0] === 'create') {
       const pathToFile = path.dirname(patch[1]);
       if (pathToFile !== '.' && dirLists.indexOf(pathToFile) === -1) {
@@ -365,15 +454,16 @@ Funnel.prototype._processPatches = function(patches) {
   return patches;
 };
 
+
 Funnel.prototype._processPaths  = function(paths) {
   return paths.
-    slice(0).
-    filter(this.includeFile, this).
-    map(function(relativePath) {
-      var output = this.lookupDestinationPath(relativePath);
-      this.outputToInputMappings[output] = relativePath;
-      return output;
-    }, this);
+  slice(0).
+  filter(this.includeFile, this).
+  map(function(relativePath) {
+    var output = this.lookupDestinationPath(relativePath);
+    this.outputToInputMappings[output] = relativePath;
+    return output;
+  }, this);
 };
 
 // TODO: inputPath is always '.' now because if we have srcDir this is handled
@@ -407,6 +497,7 @@ Funnel.prototype.processFilters = function(inputPath) {
   instrumentation.stop();
 };
 
+
 Funnel.prototype._applyPatch = function applyPatch(entry, inputPath, stats) {
   var outputToInput = this.outputToInputMappings;
   var operation = entry[0];
@@ -422,7 +513,6 @@ Funnel.prototype._applyPatch = function applyPatch(entry, inputPath, stats) {
   switch (operation) {
     case 'unlink' :
       stats.unlink++;
-
       this.out.unlinkSync(outputRelative);
       break;
     case 'rmdir'  :
@@ -536,23 +626,23 @@ Funnel.prototype.processFile = function(sourcePath, destPath /*, relativePath */
   this.out.symlinkSync(absolutePath, destPath);
 };
 
-Funnel.prototype._copy = function(sourcePath, destPath) {
-  var destDir = path.dirname(destPath);
-
-  try {
-    symlinkOrCopy.sync(sourcePath, destPath);
-  } catch(e) {
-    if (!existsSync(destDir)) {
-      mkdirp.sync(destDir);
-    }
-    try {
-      fs.unlinkSync(destPath);
-    } catch(e) {
-
-    }
-    symlinkOrCopy.sync(sourcePath, destPath);
-  }
-};
+// Funnel.prototype._copy = function(sourcePath, destPath) {
+//   var destDir = path.dirname(destPath);
+//
+//   try {
+//     symlinkOrCopy.sync(sourcePath, destPath);
+//   } catch(e) {
+//     if (!existsSync(destDir)) {
+//       mkdirp.sync(destDir);
+//     }
+//     try {
+//       fs.unlinkSync(destPath);
+//     } catch(e) {
+//
+//     }
+//     symlinkOrCopy.sync(sourcePath, destPath);
+//   }
+// };
 
 
 module.exports = Funnel;
