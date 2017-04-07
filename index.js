@@ -12,7 +12,7 @@ var rimraf = require('rimraf');
 var BlankObject = require('blank-object');
 var heimdall = require('heimdalljs');
 var existsSync = require('exists-sync');
-//var symlinkOrCopy = require('symlink-or-copy');
+var symlinkOrCopy = require('symlink-or-copy');
 var chompPathSep = require('fs-tree-diff/lib/util').chompPathSep;
 var symlink = require('fs-tree-diff/lib/util').symlink;
 
@@ -159,7 +159,6 @@ Funnel.prototype.__supportsFSFacade = true;
 
 Funnel.prototype.shouldLinkRoots = function() {
   return !this.files && !this.include && !this.exclude && !this.getDestinationPath;
-  //return !this.files && !this.include && !this.exclude && !this.getDestinationPath && this.srcDir === "/";
 };
 
 Funnel.prototype.build = function() {
@@ -227,8 +226,7 @@ Funnel.prototype.build = function() {
      * all scenarios made it possible for initial builds to succeed without
      * specifying `this.allowEmpty`.
      */
-
-        // TODO: remove?
+      // TODO: remove?
     //let inputPathExists = this.in[0].existsSync('.');
     let inputPathExists = existsSync('.');
 
@@ -265,29 +263,13 @@ Funnel.prototype.build = function() {
         //  projection of this.in[0] (via chdir and globs)
 
 
-        if (chompPathSep(this.destPath) === this.outputPath) {
-
+        if (path.normalize(chompPathSep(this.destPath)) === path.normalize(this.outputPath)) {
           rimraf.sync(this.outputPath);
-
-         // this._copy(absoluteInputPath, this.destPath);
-          symlink(absoluteInputPath, this.destPath);
-
+          this._copy(absoluteInputPath, this.destPath);
           this.out.parent = this.in[0];
 
-          if (this.destDir) {
-            this.out = this.out.chdir(this.destDir, {
-              allowEmpty: true
-            });
-          }
-
         } else {
-
-          // let destdirectory = chompPathSep(this.destDir)
-          // when symlinking, the last directory in destpath shd not be existing. So creating all paths until that.
-          // let path = destdirectory.substring(0, destdirectory.lastIndexOf("/"));
-          // mkdirp.sync(this.outputPath + "/" + path);
-
-          this.out.symlinkSyncFromInput(this.in[0], absoluteInputPath, this.destDir)
+          this.out.symlinkSyncFromEntry(this.in[0], this.srcDir, this.destDir)
         }
 
 
@@ -626,23 +608,23 @@ Funnel.prototype.processFile = function(sourcePath, destPath /*, relativePath */
   this.out.symlinkSync(absolutePath, destPath);
 };
 
-// Funnel.prototype._copy = function(sourcePath, destPath) {
-//   var destDir = path.dirname(destPath);
-//
-//   try {
-//     symlinkOrCopy.sync(sourcePath, destPath);
-//   } catch(e) {
-//     if (!existsSync(destDir)) {
-//       mkdirp.sync(destDir);
-//     }
-//     try {
-//       fs.unlinkSync(destPath);
-//     } catch(e) {
-//
-//     }
-//     symlinkOrCopy.sync(sourcePath, destPath);
-//   }
-// };
+Funnel.prototype._copy = function(sourcePath, destPath) {
+  var destDir = path.dirname(destPath);
+
+  try {
+    symlinkOrCopy.sync(sourcePath, destPath);
+  } catch(e) {
+    if (!existsSync(destDir)) {
+      mkdirp.sync(destDir);
+    }
+    try {
+      fs.unlinkSync(destPath);
+    } catch(e) {
+
+    }
+    symlinkOrCopy.sync(sourcePath, destPath);
+  }
+};
 
 
 module.exports = Funnel;
