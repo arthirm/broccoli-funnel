@@ -14,7 +14,6 @@ var heimdall = require('heimdalljs');
 var existsSync = require('exists-sync');
 var symlinkOrCopy = require('symlink-or-copy');
 var chompPathSep = require('fs-tree-diff/lib/util').chompPathSep;
-var symlink = require('fs-tree-diff/lib/util').symlink;
 
 
 function ApplyPatchesSchema() {
@@ -162,23 +161,8 @@ Funnel.prototype.shouldLinkRoots = function() {
 };
 
 Funnel.prototype.build = function() {
-  const options = {
-    parent: this.in[0],
-    cwd: this.cwd,
-    files: this.files,
-    include: this._origInclude,
-    exclude: this._origExclude,
-    srcTree: this.in[0].srcTree,
-  };
-
-  console.log('***** options *****')
-  console.log(options)
-
   this._buildStart = new Date();
-
   this.destPath = path.join(this.outputPath, this.destDir);
-  console.log('***** this.destPath')
-  console.log(this.destPath)
   if (this.destPath[this.destPath.length -1] === '/') {
     this.destPath = this.destPath.slice(0, -1);
   }
@@ -226,10 +210,8 @@ Funnel.prototype.build = function() {
      * all scenarios made it possible for initial builds to succeed without
      * specifying `this.allowEmpty`.
      */
-      // TODO: remove?
-    //let inputPathExists = this.in[0].existsSync('.');
-    let inputPathExists = existsSync('.');
 
+    let inputPathExists = this.in[0].existsSync('.');
 
     // This is specifically looking for broken symlinks.
     var outputPathExists = existsSync(this.outputPath);
@@ -252,26 +234,16 @@ Funnel.prototype.build = function() {
       }
     } else { // Not a rebuild.
       if (inputPathExists) {
-        // We don't want to use the generated-for-us folder.
-        // Instead let's remove it:
-        // And then symlinkOrCopy over top of it:
-        // TODO: change tracking.  In principle we could enable support for
-        //  `this.out.symlinkSync(this.in[0].resolvePath('.'), '.'`)`
-        //  ie symlinking the out tree's root to the in tree
-        //  however it makes fstree a bit more complicated, and when we have
-        //  change tracking linkRoots will just be replaced by making this.out a
-        //  projection of this.in[0] (via chdir and globs)
 
-
+        //TODO: Add comments
         if (path.normalize(chompPathSep(this.destPath)) === path.normalize(this.outputPath)) {
           rimraf.sync(this.outputPath);
           this._copy(absoluteInputPath, this.destPath);
           this.out.parent = this.in[0];
 
         } else {
-          this.out.symlinkSyncFromEntry(this.in[0], this.srcDir, this.destDir)
+          this.out.symlinkSyncFromEntry(this.in[0], this.srcDir, this.destDir);
         }
-
 
       } else if (!inputPathExists && this.allowEmpty) {
         // Can't symlink nothing, so make an empty folder at `destPath`:
@@ -307,45 +279,6 @@ Funnel.prototype.build = function() {
     destPath: this.destPath
   });
 };
-
-
-function replacePathInEntries(fsTree, srcPath, destPath) {
-  if(fsTree.__hasEntries) {
-    if(destPath == "/") {
-      destPath  = "";
-    } else {
-      destPath  = destPath + "/";
-    }
-
-    let indexToRemove = -1;
-
-     fsTree.entries.forEach( (entry, index) => {
-
-       if(srcPath == "/") {
-         entry.relativePath = destPath  + entry.relativePath;
-       } else {
-         entry.relativePath = entry.relativePath.replace(srcPath, destPath);
-       }
-        //TODO:remove leading '/' ?
-       if(entry.relativePath == "" ) {
-         indexToRemove = index;
-       }
-    })
-
-    if(indexToRemove != -1) {
-      fsTree.entries.splice(indexToRemove, 1);
-    }
-  }
-
-
-   if(destPath !== "") {
-     fsTree.entries.unshift({
-       mode: 16877, relativePath: destPath, size: 0, mtime: Date.now(), checksum: null,
-     });
-   }
-
-  return fsTree;
-}
 
 
 function ensureRelative(string) {
