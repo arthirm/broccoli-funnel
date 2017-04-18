@@ -77,6 +77,9 @@ function Funnel(inputNode, _options) {
   }
 
   this.destDir = this.destDir || '/';
+  this.srcDir = this.srcDir || '/';
+
+
   this.count = 0;
 
   if (this.files && typeof this.files === 'function') {
@@ -168,7 +171,7 @@ Funnel.prototype.build = function() {
   }
 
   // TODO: should not allowEmpty by default, take allowEmpty from options
-  if (this.srcDir) {
+  if (this.srcDir !== "/") {
     this.in[0] = this.in[0].chdir(this.srcDir, {
       allowEmpty: true
     });
@@ -234,14 +237,15 @@ Funnel.prototype.build = function() {
       }
     } else { // Not a rebuild.
       if (inputPathExists) {
-
-        //TODO: Add comments
-        if (path.normalize(chompPathSep(this.destPath)) === path.normalize(this.outputPath)) {
+       // if (path.normalize(chompPathSep(this.destPath)) === path.normalize(this.outputPath)) {
+        if(this.destDir === "/") {
+          // if destDir is slash then we cannot call symlink on root so create a projection of inTree and store it in outTree's parent.
           rimraf.sync(this.outputPath);
           this._copy(absoluteInputPath, this.destPath);
           this.out.parent = this.in[0];
-
-        } else {
+        }
+        else {
+          // If both srcDir and destDir are present call symlinkSyncfromEntry to track the change.
           this.out.symlinkSyncFromEntry(this.in[0], this.srcDir, this.destDir);
         }
 
@@ -310,7 +314,8 @@ Funnel.prototype._processPatches = function(patches) {
   let dirLists = [];
   let i = 0;
 
-  if (this.destDir !== '/' && this.destDir !== '.') {
+ // if patches are empty dont add another patch for destDir
+  if (this.destDir !== '/' && this.destDir !== '.' && patches.length > 0) {
     // add destination path to head of patches because it wont be in changes()
     let destDir = this.destDir[0] === '/' ? this.destDir.substring(1) : this.destDir;
     patches.unshift([
@@ -404,6 +409,10 @@ Funnel.prototype.processFilters = function(inputPath) {
   instrumentation.stop();
 
   instrumentation = heimdall.start('applyPatch', ApplyPatchesSchema);
+
+  console.log("----patches from funnel")
+  console.log(patches);
+
 
   patches.forEach(function(entry) {
     this._applyPatch(entry, inputPath, instrumentation.stats);
