@@ -337,8 +337,11 @@ Funnel.prototype._processPatches = function(patches) {
     let patch = patches[i];
 
     const outputRelativePath = this.lookupDestinationPath(patch[2].relativePath, patch[2].mode);
+
     this.outputToInputMappings[outputRelativePath] = patch[2].relativePath;
+
     patch[1] = this.lookupDestinationPath(patch[1], patch[2].mode);
+
     patch[2].relativePath = outputRelativePath;
 
     if (patch[0] === 'mkdir' || patch[0] === 'mkdirp') {
@@ -408,11 +411,7 @@ Funnel.prototype.processFilters = function(inputPath) {
 
   instrumentation.stop();
 
-  instrumentation = heimdall.start('applyPatch', ApplyPatchesSchema);
-
-  console.log("----patches from funnel")
-  console.log(patches);
-
+  instrumentation = heimdall.start('applyPatch  - broccoli-funnel', ApplyPatchesSchema);
 
   patches.forEach(function(entry) {
     this._applyPatch(entry, inputPath, instrumentation.stats);
@@ -420,7 +419,6 @@ Funnel.prototype.processFilters = function(inputPath) {
 
   instrumentation.stop();
 };
-
 
 Funnel.prototype._applyPatch = function applyPatch(entry, inputPath, stats) {
   var outputToInput = this.outputToInputMappings;
@@ -470,12 +468,14 @@ Funnel.prototype._applyPatch = function applyPatch(entry, inputPath, stats) {
 };
 
 Funnel.prototype.lookupDestinationPath = function(relativePath, mode) {
+
   if (this._destinationPathCache[relativePath] !== undefined) {
     return this._destinationPathCache[relativePath];
   }
 
   // the destDir is absolute to prevent '..' above the output dir
-  if (this.getDestinationPath && mode === 33188) {
+  //TODO: Better way to check if its a file
+  if (this.getDestinationPath && (mode === 33188 || mode === 0) ) {
     return this._destinationPathCache[relativePath] = ensureRelative(path.join(this.destDir, this.getDestinationPath(relativePath)));
   }
 
