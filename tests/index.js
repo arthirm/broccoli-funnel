@@ -151,11 +151,12 @@ describe('broccoli-funnel', function(){
     it('properly supports relative path input node', function() {
       var assertions = 0;
 
-      var node = new Funnel('../broccoli-funnel', {
+      var node = new Funnel('../broccoli-funnel/tests', {
         destDir: 'foo'
       });
 
       builder = new broccoli.Builder(node);
+
       return builder.build()
         .catch(function(error) {
           assertions++;
@@ -214,11 +215,10 @@ describe('broccoli-funnel', function(){
         // sourcePath is still absolute
         // destPath is relative but unmapped
         // relativePath is mapped
-        processFile: function(sourcePath, destPath, relativePath) {
+        processFile: function(sourcePath, destPath) {
           processFileArguments.push([
             sourcePath,
             destPath,
-            relativePath
           ]);
         }
       });
@@ -230,11 +230,9 @@ describe('broccoli-funnel', function(){
         var expected = [
           [ './subdir1/subsubdir1/foo.png',
             'foo/subdir1/subsubdir1/foo.png',
-            'subdir1/subsubdir1/foo.png'
           ],
           [ './subdir1/subsubdir2/some.js',
             'foo/subdir1/subsubdir2/some.js',
-            'subdir1/subsubdir2/some.js'
           ]
         ];
 
@@ -374,10 +372,15 @@ describe('broccoli-funnel', function(){
       builder = new broccoli.Builder(node);
       return builder.build()
         .then(function() {
-          return rimraf(node.outputPath);
+          return rimraf(inputPath + '/subdir1');
         })
         .then(function() {
-          fs.symlinkSync('foo/bar/baz.js', node.outputPath);
+          return builder.build();
+        })
+        .then(function() {
+          fixturify.writeSync(inputPath + '/subdir1', {
+            'foo.txt': 'foo',
+          });
         })
         .then(function() {
           return builder.build();
@@ -502,7 +505,6 @@ describe('broccoli-funnel', function(){
       return builder.build()
       .then(function(results) {
         var outputPath = results.directory;
-
         expect(walkSync(outputPath)).to.eql(expected);
       });
     }
@@ -596,13 +598,12 @@ describe('broccoli-funnel', function(){
             return filesByCounter.shift();
           }
         });
-
+        //build 1
         builder = new broccoli.Builder(tree);
 
         return builder.build()
         .then(function(results) {
           var outputPath = results.directory;
-
           var expected = [
             'subdir1/',
             'subdir1/subsubdir1/',
@@ -610,15 +611,13 @@ describe('broccoli-funnel', function(){
             'subdir2/',
             'subdir2/bar.css'
           ];
-
           expect(walkSync(outputPath)).to.eql(expected);
 
-          // Build again
+          // Build again (2)
           return builder.build();
         })
         .then(function(results) {
           var outputPath = results.directory;
-
           var expected = [
             'subdir1/',
             'subdir1/subsubdir1/',
@@ -627,17 +626,16 @@ describe('broccoli-funnel', function(){
 
           expect(walkSync(outputPath)).to.eql(expected);
 
-          // Build again
+          // Build again (3)
           return builder.build();
         })
         .then(function(results) {
           var outputPath = results.directory;
-
           var expected = [];
 
           expect(walkSync(outputPath)).to.eql(expected);
 
-          // Build again
+          // Build again (4)
           return builder.build();
         })
         .then(function(results) {
@@ -784,6 +782,7 @@ describe('broccoli-funnel', function(){
       testAllExcludeMatchers([ '**/*.png' ], [ /.png$/ ], [ matchPNG ], [
         'root-file.txt',
         'subdir1/',
+        'subdir1/subsubdir1/',
         'subdir1/subsubdir2/',
         'subdir1/subsubdir2/some.js',
         'subdir2/',
@@ -792,6 +791,9 @@ describe('broccoli-funnel', function(){
 
       testAllExcludeMatchers([ '**/*.png', '**/*.js' ], [ /.png$/, /.js$/ ], [ matchPNGAndJS ], [
         'root-file.txt',
+        'subdir1/',
+        'subdir1/subsubdir1/',
+        'subdir1/subsubdir2/',
         'subdir2/',
         'subdir2/bar.css'
       ]);
@@ -883,51 +885,6 @@ describe('broccoli-funnel', function(){
     });
   });
 
-  describe('includeFile', function() {
-    var node;
-
-    beforeEach(function() {
-      var inputPath = FIXTURE_INPUT + '/dir1';
-
-      node = new Funnel(inputPath);
-    });
-
-    it('returns false if the path is included in an exclude filter', function() {
-      node.exclude = [ /.foo$/, /.bar$/ ];
-
-      expect(node.includeFile('blah/blah/blah.foo')).to.eql(false);
-      expect(node.includeFile('blah/blah/blah.bar')).to.eql(false);
-      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
-    });
-
-    it('returns true if the path is included in an include filter', function() {
-      node.include = [ /.foo$/, /.bar$/ ];
-
-      expect(node.includeFile('blah/blah/blah.foo')).to.eql(true);
-      expect(node.includeFile('blah/blah/blah.bar')).to.eql(true);
-    });
-
-    it('returns false if the path is not included in an include filter', function() {
-      node.include = [ /.foo$/, /.bar$/ ];
-
-      expect(node.includeFile('blah/blah/blah.baz')).to.not.eql(true);
-    });
-
-    it('returns true if no patterns were used', function() {
-      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
-    });
-
-    it('uses a cache to ensure we do not recalculate the filtering on subsequent attempts', function() {
-      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
-
-      // changing the filter mid-run should have no result on
-      // previously calculated paths
-      node.include = [ /.foo$/, /.bar$/ ];
-
-      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
-    });
-  });
-
   describe('lookupDestinationPath', function() {
     var node;
 
@@ -940,7 +897,10 @@ describe('broccoli-funnel', function(){
     it('returns the input path if no getDestinationPath method is defined', function() {
       var relativePath = 'foo/bar/baz';
 
-      expect(node.lookupDestinationPath(relativePath, 33188)).to.be.equal(relativePath);
+      expect(node.lookupDestinationPath({
+        relativePath,
+        mode: 33188,
+      })).to.be.equal(relativePath);
     });
 
     it('returns the output of getDestinationPath method if defined', function() {
@@ -950,7 +910,11 @@ describe('broccoli-funnel', function(){
       node.getDestinationPath = function() {
         return expected;
       };
-      expect(node.lookupDestinationPath(relativePath, 33188)).to.be.equal(expected);
+
+      expect(node.lookupDestinationPath({
+        relativePath,
+        mode: 33188,
+      })).to.be.equal(expected);
     });
 
     it('only calls getDestinationPath once and caches result', function() {
@@ -965,13 +929,38 @@ describe('broccoli-funnel', function(){
         return expected;
       };
 
-      expect(node.lookupDestinationPath(relativePath, 33188)).to.be.equal(expected);
+      expect(node.lookupDestinationPath({
+        relativePath,
+        mode: 33188,
+      })).to.be.equal(expected);
       expect(getDestPathCalled).to.be.equal(1);
 
       getDestPathValue = 'some/other/thing';
 
-      expect(node.lookupDestinationPath(relativePath, 33188)).to.be.equal(expected);
+      expect(node.lookupDestinationPath({
+        relativePath,
+        mode: 33188,
+      })).to.be.equal(expected);
       expect(getDestPathCalled).to.be.equal(1);
+    });
+
+    it('does not call getDestinationPath for directories', () => {
+      const relativePath = 'foo/bar/baz';
+      const expected = 'blah/blah/blah';
+      let getDestPathCalled = 0;
+
+      node.getDestinationPath = () => {
+        getDestPathCalled++;
+
+        return expected;
+      };
+
+      node.lookupDestinationPath({
+        relativePath,
+        mode: 16877,
+      });
+
+      expect(getDestPathCalled).to.be.equal(0);
     });
   });
 });

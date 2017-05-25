@@ -23,19 +23,15 @@
     "javascript"
   ],
   "dependencies": {
-    "array-equal": "^1.0.0",
     "blank-object": "^1.0.1",
     "broccoli-plugin": "hjdivad/broccoli-plugin#hjdivad/change-tracking",
     "debug": "^2.2.0",
-    "exists-sync": "0.0.4",
     "fast-ordered-set": "^1.0.0",
     "fs-tree-diff": "stefanpenner/fs-tree-diff#fs-tree-facade",
     "heimdalljs": "^0.2.0",
     "minimatch": "^3.0.0",
-    "mkdirp": "^0.5.0",
     "path-posix": "^1.0.0",
     "rimraf": "^2.4.3",
-    "symlink-or-copy": "^1.0.0",
     "walk-sync": "hjdivad/node-walk-sync#support-user-supplied-fs"
   },
   "devDependencies": {
