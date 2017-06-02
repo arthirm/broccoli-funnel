@@ -230,6 +230,7 @@ Funnel.prototype.build = function() {
       }
     } else { // Not a rebuild.
       if (inputPathExists) {
+        // TODO: refactor this and processFile back into a single function once symlinkSyncFromEntry supports files.
         if (!isRoot(this.destDir)) {
           const parentDir = path.dirname(this.destDir);
 
@@ -271,7 +272,7 @@ function ensureRelative(string) {
 }
 
 Funnel.prototype._processPatches = function(patches) {
-  let dirLists = [];
+  let dirList = new Set();
   let i = 0;
 
   // if patches are empty dont add another patch for destDir
@@ -289,23 +290,19 @@ Funnel.prototype._processPatches = function(patches) {
         checksum: null,
       },
     ]);
-    dirLists.push(destDir);
+    dirList.add(chompPathSep(destDir));
     i++;
   }
 
   for (i = i; i < patches.length; ++i) {
     let patch = patches[i];
-    const inputRelativePath = patch[2].relativePath;
     const outputRelativePath = this.lookupDestinationPath(patch[2]);
-
     this.outputToInputMappings[outputRelativePath] = patch[2].relativePath;
-
     patch[1] = outputRelativePath;
-
     patch[2].relativePath = outputRelativePath;
 
     if (patch[0] === 'mkdir' || patch[0] === 'mkdirp') {
-      dirLists.push(patch[1]);
+      dirList.add(chompPathSep(patch[1]));
     }
 
     // TODO: Add tests for this
@@ -314,11 +311,11 @@ Funnel.prototype._processPatches = function(patches) {
      this.lookupDestinationPath(entry) returns c/b/a.js
      we need to mkdirp c/b
      */
-    if (patch[0] === 'create' && inputRelativePath !== outputRelativePath) {
-      const parentRelativePath = path.dirname(outputRelativePath);
+    const parentRelativePath = chompPathSep(path.dirname(outputRelativePath));
 
-      if (parentRelativePath !== '.' && dirLists.indexOf(parentRelativePath) === -1) {
-        dirLists.push(parentRelativePath);
+    if (parentRelativePath !== '.' && !dirList.has(parentRelativePath)) {
+
+        dirList.add(parentRelativePath);
         patches.splice.apply(patches, [i,0].concat([[
           'mkdirp',
           parentRelativePath,
@@ -332,7 +329,6 @@ Funnel.prototype._processPatches = function(patches) {
         ]]));
         i++;
       }
-    }
   }
 
   return patches;
@@ -345,9 +341,10 @@ Funnel.prototype.processFilters = function(inputPath) {
 
   this.outputToInputMappings = {}; // we allow users to rename files
 
+  if (this._shouldDebug && this._projectedIn.changes().some(change => change[1].endsWith('app.js'))) debugger;
+  this._shouldDebug = true;
   // utilize change tracking from this._projectedIn
   const patches = this._processPatches(this._projectedIn.changes());
-
 
   console.log('----------------patches from funnel');
   patches.forEach(patch => {
@@ -445,7 +442,24 @@ Funnel.prototype.lookupDestinationPath = function(entry) {
 Funnel.prototype.processFile = function(sourcePath, destPath) {
   const absolutePath = this._projectedIn.resolvePath(sourcePath);
 
-  this.out.symlinkSync(absolutePath, destPath);
+  try {
+    this.out.symlinkSync(absolutePath, destPath);
+  } catch (ex1) {
+    const parentPath = path.dirname(destPath);
+
+    // Ensure the parent directory exists.
+    if (!this.out.existsSync(parentPath)) {
+      this.out.mkdirpSync(parentPath);
+    }
+
+    // Ensure the target file *doesn't* exist.
+    try {
+      this.out.unlinkSync(destPath);
+    } catch (ex2) {}
+
+    // Try again.
+    this.out.symlinkSync(absolutePath, destPath);
+  }
 };
 
 module.exports = Funnel;
