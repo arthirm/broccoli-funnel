@@ -351,6 +351,10 @@ Funnel.prototype.processFilters = function(inputPath) {
     console.log(patch[0] + ' ' + chompPathSep(patch[1]));
   });
 
+  if (patches.some(change => change[1].endsWith('assets/artdeco/static/images/textures/tesselation.svg'))) debugger;
+
+
+
   instrumentation.stats.patches = patches.length;
   instrumentation.stats.entries = this._projectedIn.size;
   instrumentation.stats._patches = patches;
