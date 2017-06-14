@@ -24,10 +24,10 @@
   ],
   "dependencies": {
     "blank-object": "^1.0.1",
-    "broccoli-plugin": "arthirm/broccoli-plugin#hjdivad/change-tracking",
+    "broccoli-plugin": "hjdivad/broccoli-plugin#hjdivad/change-tracking",
     "debug": "^2.2.0",
     "fast-ordered-set": "^1.0.0",
-    "fs-tree-diff": "arthirm/fs-tree-diff#refactor",
+    "fs-tree-diff": "stefanpenner/fs-tree-diff#fs-tree-facade",
     "heimdalljs": "^0.2.0",
     "minimatch": "^3.0.0",
     "path-posix": "^1.0.0",

@@ -163,12 +163,20 @@ Funnel.prototype.build = function() {
   this.destPath = this.out.resolvePath(this.destDir);
 
   if (!this._projectedIn) {
-    this._projectedIn = this.in[0].filtered({
-      cwd: this.srcDir,
-      files: this.files,
-      include: this._origInclude,
-      exclude: this._origExclude,
-    });
+    if (this.in[0].srcTree) {
+      this._projectedIn = this.in[0];
+      this.in[0].cwd = this.srcDir;
+      this.in[0].files = this.files;
+      this.in[0].include = this._origInclude;
+      this.in[0].exclude = this._origExclude;
+    } else {
+      this._projectedIn = this.in[0].filtered({
+        cwd: this.srcDir,
+        files: this.files,
+        include: this._origInclude,
+        exclude: this._origExclude,
+      });
+    }
   }
 
   if (this._dynamicFilesFunc) {
@@ -199,6 +207,9 @@ Funnel.prototype.build = function() {
      * specifying `this.allowEmpty`.
      */
 
+    if(this._projectedIn.cwd.indexOf("engines-dist") > 0 ) {
+          debugger;
+    }
     const inputPathExists = this._projectedIn.existsSync('');
 
     // This is specifically looking for broken symlinks.
@@ -230,17 +241,7 @@ Funnel.prototype.build = function() {
       }
     } else { // Not a rebuild.
       if (inputPathExists) {
-        // TODO: refactor this and processFile back into a single function once symlinkSyncFromEntry supports files.
-        if (!isRoot(this.destDir)) {
-          const parentDir = path.dirname(this.destDir);
-
-          if (!isRoot(parentDir)) {
-            this.out.mkdirpSync(parentDir);
-          }
-        }
-
-        // If isRoot(this.destDir), this.out.parent will be set.
-        this.out.symlinkSyncFromEntry(this._projectedIn, '', this.destDir);
+        symlink(this._projectedIn, '', this.out, this.destDir);
       } else if (!inputPathExists && this.allowEmpty) {
         // Can't symlink nothing, so make an empty folder at `destPath`:
         if (!isRoot(this.destDir)) {
@@ -341,19 +342,19 @@ Funnel.prototype.processFilters = function(inputPath) {
 
   this.outputToInputMappings = {}; // we allow users to rename files
 
-  if (this._shouldDebug && this._projectedIn.changes().some(change => change[1].endsWith('app.js'))) debugger;
-  this._shouldDebug = true;
+  if (this._projectedIn.changes().some(change => change[1].endsWith("s-organization.css") && change[0] === "unlink" )) debugger;
+
+
   // utilize change tracking from this._projectedIn
   const patches = this._processPatches(this._projectedIn.changes());
 
-  console.log('----------------patches from funnel');
+  console.log(`----------------patches from ${this._name + (this._annotation != null ? ' (' + this._annotation + ')' : '')}`);
   patches.forEach(patch => {
     console.log(patch[0] + ' ' + chompPathSep(patch[1]));
+    if(patch[1].indexOf("s-organization.css") > -1 && patch[0].indexOf("unlink") > 0) {
+      debugger;
+    }
   });
-
-  if (patches.some(change => change[1].endsWith('assets/artdeco/static/images/textures/tesselation.svg'))) debugger;
-
-
 
   instrumentation.stats.patches = patches.length;
   instrumentation.stats.entries = this._projectedIn.size;
@@ -444,26 +445,25 @@ Funnel.prototype.lookupDestinationPath = function(entry) {
 };
 
 Funnel.prototype.processFile = function(sourcePath, destPath) {
-  const absolutePath = this._projectedIn.resolvePath(sourcePath);
-
-  try {
-    this.out.symlinkSync(absolutePath, destPath);
-  } catch (ex1) {
-    const parentPath = path.dirname(destPath);
-
-    // Ensure the parent directory exists.
-    if (!this.out.existsSync(parentPath)) {
-      this.out.mkdirpSync(parentPath);
-    }
-
-    // Ensure the target file *doesn't* exist.
-    try {
-      this.out.unlinkSync(destPath);
-    } catch (ex2) {}
-
-    // Try again.
-    this.out.symlinkSync(absolutePath, destPath);
-  }
+  symlink(this._projectedIn, sourcePath, this.out, destPath);
 };
+
+function symlink(sourceTree, sourcePath, destTree, destPath) {
+  const parentPath = path.dirname(destPath);
+
+  // Ensure the parent directory exists.
+  if (!destTree.existsSync(parentPath)) {
+    destTree.mkdirpSync(parentPath);
+  }
+
+  // Ensure the target file *doesn't* exist.
+  if (!isRoot(destPath) && destTree.existsSync(destPath)) {
+    destTree.unlinkSync(destPath);
+  }
+
+
+  destTree.symlinkSyncFromEntry(sourceTree, sourcePath, destPath);
+
+}
 
 module.exports = Funnel;

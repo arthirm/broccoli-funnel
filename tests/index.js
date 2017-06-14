@@ -393,18 +393,16 @@ describe('broccoli-funnel', function(){
         });
     });
 
-    it('simply returns a copy of the input node at a nested source', function() {
+    it.only('simply returns a copy of the input node at a nested source', function() {
       var inputPath = FIXTURE_INPUT + '/dir1';
       var node = new Funnel(inputPath, {
         srcDir: 'subdir1'
       });
-
       builder = new broccoli.Builder(node);
       return builder.build()
         .then(function(results) {
           var restrictedInputPath = inputPath + '/subdir1';
           var outputPath = results.directory;
-
           expect(walkSync(outputPath)).to.eql(walkSync(restrictedInputPath));
         })
         .then(function() {
