@@ -163,20 +163,20 @@ Funnel.prototype.build = function() {
   this.destPath = this.out.resolvePath(this.destDir);
 
   if (!this._projectedIn) {
-    if (this.in[0].srcTree) {
-      this._projectedIn = this.in[0];
-      this.in[0].cwd = this.srcDir;
-      this.in[0].files = this.files;
-      this.in[0].include = this._origInclude;
-      this.in[0].exclude = this._origExclude;
-    } else {
+    // if (this.in[0].srcTree) {
+    //   this._projectedIn = this.in[0];
+    //   this.in[0].cwd = this.srcDir;
+    //   this.in[0].files = this.files;
+    //   this.in[0].include = this._origInclude;
+    //   this.in[0].exclude = this._origExclude;
+    // } else {
       this._projectedIn = this.in[0].filtered({
         cwd: this.srcDir,
         files: this.files,
         include: this._origInclude,
         exclude: this._origExclude,
       });
-    }
+    //}
   }
 
   if (this._dynamicFilesFunc) {
