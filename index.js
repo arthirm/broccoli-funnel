@@ -98,13 +98,6 @@ function Funnel(inputNode, _options) {
     }
   }
 
-  this._setupFilter('include');
-  this._setupFilter('exclude');
-
-  this._matchedWalk = this.include && this.include.filter(function(a) {
-        return a instanceof Minimatch;
-      }).length === this.include.length;
-
   this._instantiatedStack = (new Error()).stack;
   this._buildStart = undefined;
 }
@@ -115,41 +108,6 @@ Funnel.prototype._debugName = function() {
 
 Funnel.prototype._debug = function(message) {
   debug('broccoli-funnel:' + (this._debugName())).apply(null, arguments);
-};
-
-Funnel.prototype._setupFilter = function(type) {
-  if (!this[type]) {
-    return;
-  }
-
-  if (!Array.isArray(this[type])) {
-    throw new Error('Invalid ' + type + ' option, it must be an array. You specified `' + typeof this[type] + '`.');
-  }
-
-  // Clone the filter array so we are not mutating an external variable
-  var filters = this[type] = this[type].slice(0);
-
-  for (var i = 0, l = filters.length; i < l; i++) {
-    filters[i] = this._processPattern(filters[i]);
-  }
-};
-
-Funnel.prototype._processPattern = function(pattern) {
-  if (pattern instanceof RegExp) {
-    return pattern;
-  }
-
-  var type = typeof pattern;
-
-  if (type === 'string') {
-    return new Minimatch(pattern);
-  }
-
-  if (type === 'function') {
-    return pattern;
-  }
-
-  throw new Error('include/exclude patterns can be a RegExp, glob string, or function. You supplied `' + typeof pattern +'`.');
 };
 
 Funnel.prototype.__supportsFSFacade = true;
@@ -163,20 +121,12 @@ Funnel.prototype.build = function() {
   this.destPath = this.out.resolvePath(this.destDir);
 
   if (!this._projectedIn) {
-    // if (this.in[0].srcTree) {
-    //   this._projectedIn = this.in[0];
-    //   this.in[0].cwd = this.srcDir;
-    //   this.in[0].files = this.files;
-    //   this.in[0].include = this._origInclude;
-    //   this.in[0].exclude = this._origExclude;
-    // } else {
       this._projectedIn = this.in[0].filtered({
         cwd: this.srcDir,
         files: this.files,
         include: this._origInclude,
         exclude: this._origExclude,
       });
-    //}
   }
 
   if (this._dynamicFilesFunc) {
@@ -206,22 +156,15 @@ Funnel.prototype.build = function() {
      * all scenarios made it possible for initial builds to succeed without
      * specifying `this.allowEmpty`.
      */
-
-    if(this._projectedIn.cwd.indexOf("engines-dist") > 0 ) {
-          debugger;
-    }
+    
     const inputPathExists = this._projectedIn.existsSync('');
-
-    // This is specifically looking for broken symlinks.
-    // const outputPathExists = fs.existsSync(this.outputPath);
-
-    // // Doesn't count as a rebuild if there's not an existing outputPath.
-    // this._isRebuild = this._isRebuild && outputPathExists;
-
     // Doesn't count as a rebuild if the output is empty or not a projection.  (No links.)
     this._isRebuild = this._isRebuild && (this.out.parent || this.out.size);
 
     if (this._isRebuild) {
+
+      this._prevEntries = this._entries;
+
       if (inputPathExists) {
         // Already works because of symlinks. Do nothing.
       } else if (this.allowEmpty) {
@@ -274,35 +217,20 @@ function ensureRelative(string) {
 
 Funnel.prototype._processPatches = function(patches) {
   let dirList = new Set();
-  let i = 0;
 
-  // if patches are empty dont add another patch for destDir
-  if (!isRoot(this.destDir) && patches.length > 0) {
-    // add destination path to head of patches because it wont be in changes()
-    let destDir = this.destDir[0] === '/' ? this.destDir.substring(1) : this.destDir;
-    patches.unshift([
-      'mkdirp',
-      destDir,
-      {
-        mode: 16877,
-        relativePath: destDir,
-        size: 0,
-        mtime: Date.now(),
-        checksum: null,
-      },
-    ]);
-    dirList.add(chompPathSep(destDir));
-    i++;
-  }
-
-  for (i = i; i < patches.length; ++i) {
+  for (let i = 0; i < patches.length; ++i) {
     let patch = patches[i];
+    let operation = patch[0];
+  
     const outputRelativePath = this.lookupDestinationPath(patch[2]);
     this.outputToInputMappings[outputRelativePath] = patch[2].relativePath;
     patch[1] = outputRelativePath;
     patch[2].relativePath = outputRelativePath;
 
-    if (patch[0] === 'mkdir' || patch[0] === 'mkdirp') {
+    // if(operation === 'rmdir' || operation === 'unlink') {
+    //   continue;
+    // }
+    if (operation === 'mkdir' || operation === 'mkdirp') {
       dirList.add(chompPathSep(patch[1]));
     }
 
@@ -315,10 +243,16 @@ Funnel.prototype._processPatches = function(patches) {
     const parentRelativePath = chompPathSep(path.dirname(outputRelativePath));
 
     if (parentRelativePath !== '.' && !dirList.has(parentRelativePath)) {
+        let setOperation;
+        if(dirList.has(parentRelativePath.substring(0, parentRelativePath.lastIndexOf('/'))) || parentRelativePath.split('/').length  === 1) {
+          setOperation = 'mkdir';
+        } else {
+          setOperation = 'mkdirp';
+        }
 
         dirList.add(parentRelativePath);
         patches.splice.apply(patches, [i,0].concat([[
-          'mkdirp',
+          setOperation,
           parentRelativePath,
           {
             mode: 16877,
@@ -342,29 +276,16 @@ Funnel.prototype.processFilters = function(inputPath) {
 
   this.outputToInputMappings = {}; // we allow users to rename files
 
-  if (this._projectedIn.changes().some(change => change[1].endsWith("s-organization.css") && change[0] === "unlink" )) debugger;
-
-
   // utilize change tracking from this._projectedIn
   const patches = this._processPatches(this._projectedIn.changes());
 
   console.log(`----------------patches from ${this._name + (this._annotation != null ? ' (' + this._annotation + ')' : '')}`);
   patches.forEach(patch => {
     console.log(patch[0] + ' ' + chompPathSep(patch[1]));
-    if(patch[1].indexOf("s-organization.css") > -1 && patch[0].indexOf("unlink") > 0) {
-      debugger;
-    }
   });
 
   instrumentation.stats.patches = patches.length;
-  instrumentation.stats.entries = this._projectedIn.size;
-  instrumentation.stats._patches = patches;
-  instrumentation.stats.srcTree = this._projectedIn.srcTree;
-  instrumentation.stats.inroot = this._projectedIn.root;
-  instrumentation.stats.outroot = this.out.root;
-
   instrumentation.stop();
-
   instrumentation = heimdall.start('applyPatch  - broccoli-funnel', ApplyPatchesSchema);
 
   patches.forEach(function(entry) {
@@ -418,11 +339,9 @@ Funnel.prototype._applyPatch = function applyPatch(entry, inputPath, stats) {
       }
 
       let inputRelative = outputToInput[outputRelative];
-
       if (inputRelative === undefined) {
         inputRelative = outputToInput['/' + outputRelative] || outputToInput[this.destDir + '/' + outputRelative] || '';
       }
-
       this.processFile(inputPath + '/' + inputRelative, outputRelative);
 
       break;
@@ -436,7 +355,6 @@ Funnel.prototype.lookupDestinationPath = function(entry) {
   }
 
   // the destDir is absolute to prevent '..' above the output dir
-  //TODO: Better way to check if its a file
   if (this.getDestinationPath && !isDirectory(entry)) {
     return this._destinationPathCache[entry.relativePath] = ensureRelative(path.join(this.destDir, this.getDestinationPath(entry.relativePath)));
   }
@@ -460,10 +378,7 @@ function symlink(sourceTree, sourcePath, destTree, destPath) {
   if (!isRoot(destPath) && destTree.existsSync(destPath)) {
     destTree.unlinkSync(destPath);
   }
-
-
   destTree.symlinkSyncFromEntry(sourceTree, sourcePath, destPath);
-
 }
 
 module.exports = Funnel;
