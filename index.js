@@ -82,13 +82,7 @@ function Funnel(inputNode, _options) {
     // still assume that this.files is always an array.
     this._dynamicFilesFunc = this.files;
     delete this.files;
-  } else if (this.files && !Array.isArray(this.files)) {
-    throw new Error('Invalid files option, it must be an array or function (that returns an array).');
-  }
-
-  if ((this.files || this._dynamicFilesFunc) && (this.include || this.exclude)) {
-    throw new Error('Cannot pass files option (array or function) and a include/exlude filter. You can only have one or the other');
-  }
+  } 
 
   if (this.files) {
     if (this.files.filter(isNotAPattern).length !== this.files.length) {
@@ -227,9 +221,6 @@ Funnel.prototype._processPatches = function(patches) {
     patch[1] = outputRelativePath;
     patch[2].relativePath = outputRelativePath;
 
-    // if(operation === 'rmdir' || operation === 'unlink') {
-    //   continue;
-    // }
     if (operation === 'mkdir' || operation === 'mkdirp') {
       dirList.add(chompPathSep(patch[1]));
     }

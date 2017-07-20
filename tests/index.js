@@ -292,18 +292,6 @@ describe('broccoli-funnel', function(){
         ]);
       });
     });
-
-    // it('correctly chooses _matchedWalk scenario', function() {
-    //   var inputPath = FIXTURE_INPUT + '/dir1';
-    //   var node;
-    //   node = new Funnel(inputPath, { include: [ '**/*.png', /.js$/ ] });
-
-    //   expect(node._matchedWalk).to.eql(false);
-
-    //   node = new Funnel(inputPath, { include: [ '**/*.png', '**/*.js' ] });
-
-    //   expect(node._matchedWalk).to.eql(true);
-    // });
   });
 
   describe('without filtering options', function() {
@@ -454,7 +442,6 @@ describe('broccoli-funnel', function(){
       } finally {
         console.warn = oldWarn;
       }
-
       builder = new broccoli.Builder(node);
       return builder.build()
         .then(function(results) {
@@ -544,30 +531,6 @@ describe('broccoli-funnel', function(){
 
           expect(walkSync(outputPath)).to.eql(expected);
         });
-      });
-    });
-
-    describe('`files` is incompatible with filters', function() {
-      it('so error if `files` and `include` are set', function() {
-        var inputPath = FIXTURE_INPUT + '/dir1';
-
-        expect(function() {
-          new Funnel(inputPath, {
-            files: ['anything'],
-            include: ['*.txt']
-          });
-        }).to.throw('Cannot pass files option (array or function) and a include/exlude filter. You can only have one or the other');
-      });
-
-      it('so error if `files` and `exclude` are set', function() {
-        var inputPath = FIXTURE_INPUT + '/dir1';
-
-        expect(function() {
-          new Funnel(inputPath, {
-            files: function() { return ['anything']; },
-            exclude: ['*.md']
-          });
-        }).to.throw('Cannot pass files option (array or function) and a include/exlude filter. You can only have one or the other');
       });
     });
 
