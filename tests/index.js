@@ -258,7 +258,7 @@ describe('broccoli-funnel', function(){
         var outputPath = results.directory;
 
         expect(walkSync(outputPath)).to.eql([
-          // only folders exist
+          // folders exist
           'foo/',
           'foo/subdir1/',
           'foo/subdir1/subsubdir1/',
@@ -284,7 +284,7 @@ describe('broccoli-funnel', function(){
         var outputPath = results.directory;
 
         expect(walkSync(outputPath)).to.eql([
-          // only dir exist
+          // dir exist
           'foo/',
           'foo/subdir1/',
           'foo/subdir1/subsubdir1/',
@@ -534,6 +534,33 @@ describe('broccoli-funnel', function(){
       });
     });
 
+/* <<<<<<< HEAD
+=======
+    describe('`files` is incompatible with filters', function() {
+      it('so error if `files` and `include` are set', function() {
+        var inputPath = FIXTURE_INPUT + '/dir1';
+
+        expect(function() {
+          new Funnel(inputPath, {
+            files: ['anything'],
+            include: ['*.txt']
+          });
+        }).to.throw('Cannot pass files option (array or function) and a include/exlude filter. You can have one or the other');
+      });
+
+      it('so error if `files` and `exclude` are set', function() {
+        var inputPath = FIXTURE_INPUT + '/dir1';
+
+        expect(function() {
+          new Funnel(inputPath, {
+            files: function() { return ['anything']; },
+            exclude: ['*.md']
+          });
+        }).to.throw('Cannot pass files option (array or function) and a include/exlude filter. You can have one or the other');
+      });
+    });
+
+>>>>>>> broccoli-js/master */
     describe('filtering with a `files` function', function() {
       it('can take files as a function', function() {
         var inputPath = FIXTURE_INPUT + '/dir1';
@@ -766,11 +793,31 @@ describe('broccoli-funnel', function(){
       });
     });
 
-    it('combined filtering', function() {
+    it('combined filtering (regexp)', function() {
       var inputPath = FIXTURE_INPUT + '/dir1';
       var node = new Funnel(inputPath, {
         exclude: [ /.png$/, /.js$/ ],
         include: [ /.txt$/ ]
+      });
+
+      builder = new broccoli.Builder(node);
+      return builder.build()
+      .then(function(results) {
+        var outputPath = results.directory;
+
+        var expected = [
+          'root-file.txt',
+        ];
+
+        expect(walkSync(outputPath)).to.eql(expected);
+      });
+    });
+
+    it('combined filtering (globs)', function() {
+      var inputPath = FIXTURE_INPUT + '/dir1';
+      var node = new Funnel(inputPath, {
+        exclude: [ '**/*.png', '**/*.js' ],
+        include: [ '**/*.txt' ]
       });
 
       builder = new broccoli.Builder(node);
@@ -846,6 +893,128 @@ describe('broccoli-funnel', function(){
     });
   });
 
+/*<<<<<<< HEAD
+=======
+  describe('canMatchWalk', function() {
+    var inputPath = FIXTURE_INPUT + '/dir1';
+
+    describe('include', function() {
+      it('is false with no include', function() {
+        var node = new Funnel(inputPath);
+        expect(node.canMatchWalk()).to.eql(false);
+      });
+
+      it('is true with string include', function() {
+        var node = new Funnel(inputPath, {
+          include: [ 'foo' ]
+        });
+        expect(node.canMatchWalk()).to.eql(true);
+      });
+
+      it('is false with regexp include', function() {
+        var node = new Funnel(inputPath, {
+          include: [ /foo/ ]
+        });
+        expect(node.canMatchWalk()).to.eql(false);
+      });
+
+      it('is false with string + regexp include', function() {
+        var node = new Funnel(inputPath, {
+          include: [ 'foo', /foo/ ]
+        });
+        expect(node.canMatchWalk()).to.eql(false);
+      });
+
+      it('is true with string + string include', function() {
+        var node = new Funnel(inputPath, {
+          include: [ 'foo', 'bar' ]
+        });
+        expect(node.canMatchWalk()).to.eql(true);
+      });
+    });
+
+    describe('exclude', function() {
+      it('is false with no exclude', function() {
+        var node = new Funnel(inputPath);
+        expect(node.canMatchWalk()).to.eql(false);
+      });
+
+      it('is true with string exclude', function() {
+        var node = new Funnel(inputPath, {
+          exclude: [ 'foo' ]
+        });
+        expect(node.canMatchWalk()).to.eql(true);
+      });
+
+      it('is false with regexp exclude', function() {
+        var node = new Funnel(inputPath, {
+          exclude: [ /foo/ ]
+        });
+        expect(node.canMatchWalk()).to.eql(false);
+      });
+
+      it('is false with string + regexp exclude', function() {
+        var node = new Funnel(inputPath, {
+          exclude: [ 'foo', /foo/ ]
+        });
+        expect(node.canMatchWalk()).to.eql(false);
+      });
+
+      it('is true with string +  string exclude', function() {
+        var node = new Funnel(inputPath, {
+          exclude: [ 'foo', 'bar' ]
+        });
+        expect(node.canMatchWalk()).to.eql(true);
+      });
+    });
+  });
+
+  describe('includeFile', function() {
+    var node;
+
+    beforeEach(function() {
+      var inputPath = FIXTURE_INPUT + '/dir1';
+
+      node = new Funnel(inputPath);
+    });
+
+    it('returns false if the path is included in an exclude filter', function() {
+      node.exclude = [ /.foo$/, /.bar$/ ];
+
+      expect(node.includeFile('blah/blah/blah.foo')).to.eql(false);
+      expect(node.includeFile('blah/blah/blah.bar')).to.eql(false);
+      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
+    });
+
+    it('returns true if the path is included in an include filter', function() {
+      node.include = [ /.foo$/, /.bar$/ ];
+
+      expect(node.includeFile('blah/blah/blah.foo')).to.eql(true);
+      expect(node.includeFile('blah/blah/blah.bar')).to.eql(true);
+    });
+
+    it('returns false if the path is not included in an include filter', function() {
+      node.include = [ /.foo$/, /.bar$/ ];
+
+      expect(node.includeFile('blah/blah/blah.baz')).to.not.eql(true);
+    });
+
+    it('returns true if no patterns were used', function() {
+      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
+    });
+
+    it('uses a cache to ensure we do not recalculate the filtering on subsequent attempts', function() {
+      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
+
+      // changing the filter mid-run should have no result on
+      // previously calculated paths
+      node.include = [ /.foo$/, /.bar$/ ];
+
+      expect(node.includeFile('blah/blah/blah.baz')).to.eql(true);
+    });
+  });
+
+>>>>>>> broccoli-js/master */
   describe('lookupDestinationPath', function() {
     var node;
 
@@ -878,7 +1047,7 @@ describe('broccoli-funnel', function(){
       })).to.be.equal(expected);
     });
 
-    it('only calls getDestinationPath once and caches result', function() {
+    it('calls getDestinationPath once and caches result', function() {
       var relativePath = 'foo/bar/baz';
       var expected = 'blah/blah/blah';
       var getDestPathValue = expected;

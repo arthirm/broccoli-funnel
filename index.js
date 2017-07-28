@@ -82,8 +82,20 @@ function Funnel(inputNode, _options) {
     // still assume that this.files is always an array.
     this._dynamicFilesFunc = this.files;
     delete this.files;
+  }
+/*<<<<<<< HEAD
   } 
 
+=======
+  } else if (this.files && !Array.isArray(this.files)) {
+    throw new Error('Invalid files option, it must be an array or function (that returns an array).');
+  }
+
+  if ((this.files || this._dynamicFilesFunc) && (this.include || this.exclude)) {
+    throw new Error('Cannot pass files option (array or function) and a include/exlude filter. You can have one or the other');
+  }
+>>>>>>> broccoli-js/master 
+ */
   if (this.files) {
     if (this.files.filter(isNotAPattern).length !== this.files.length) {
       console.warn('broccoli-funnel does not support `files:` option with globs, please use `include:` instead');
@@ -92,9 +104,41 @@ function Funnel(inputNode, _options) {
     }
   }
 
+/*<<<<<<< HEAD
+=======
+  this._setupFilter('include');
+  this._setupFilter('exclude');
+
+  this._matchedWalk = this.canMatchWalk();
+
+>>>>>>> broccoli-js/master*/
   this._instantiatedStack = (new Error()).stack;
   this._buildStart = undefined;
 }
+
+function isMinimatch(x) {
+  return x instanceof Minimatch;
+}
+Funnel.prototype.canMatchWalk = function() {
+  var include = this.include;
+  var exclude = this.exclude;
+
+  if (!include && !exclude) { return false; }
+
+  var includeIsOk = true;
+
+  if (include) {
+    includeIsOk = include.filter(isMinimatch).length === include.length;
+  }
+
+  var excludeIsOk = true;
+
+  if (exclude) {
+    excludeIsOk = exclude.filter(isMinimatch).length === exclude.length;
+  }
+
+  return includeIsOk && excludeIsOk;
+};
 
 Funnel.prototype._debugName = function() {
   return this.description || this._annotation || this.name || this.constructor.name;
@@ -270,11 +314,29 @@ Funnel.prototype.processFilters = function(inputPath) {
   // utilize change tracking from this._projectedIn
   const patches = this._processPatches(this._projectedIn.changes());
 
+//<<<<<<< HEAD
   console.log(`----------------patches from ${this._name + (this._annotation != null ? ' (' + this._annotation + ')' : '')}`);
   patches.forEach(patch => {
     console.log(patch[0] + ' ' + chompPathSep(patch[1]));
   });
 
+/*
+=======
+    if (this._matchedWalk) {
+      entries = walkSync.entries(inputPath, { globs: this.include, ignore: this.exclude });
+    } else {
+      entries = walkSync.entries(inputPath);
+    }
+
+    entries = this._processEntries(entries);
+    nextTree = FSTree.fromEntries(entries, { sortAndExpand: true });
+  }
+
+  var patches = this._currentTree.calculatePatch(nextTree);
+
+  this._currentTree = nextTree;
+>>>>>>> broccoli-js/master
+*/
   instrumentation.stats.patches = patches.length;
   instrumentation.stop();
   instrumentation = heimdall.start('applyPatch  - broccoli-funnel', ApplyPatchesSchema);
@@ -346,8 +408,51 @@ Funnel.prototype.lookupDestinationPath = function(entry) {
   }
 
   // the destDir is absolute to prevent '..' above the output dir
+//<<<<<<< HEAD
   if (this.getDestinationPath && !isDirectory(entry)) {
     return this._destinationPathCache[entry.relativePath] = ensureRelative(path.join(this.destDir, this.getDestinationPath(entry.relativePath)));
+//=======
+ // if (this.getDestinationPath) {
+  //  return this._destinationPathCache[relativePath] = ensureRelative(path.join(this.destDir, this.getDestinationPath(relativePath)));
+
+
+ /* return this._destinationPathCache[relativePath] = ensureRelative(path.join(this.destDir, relativePath));
+  
+};
+
+Funnel.prototype.includeFile = function(relativePath) {
+  var includeFileCache = this._includeFileCache;
+
+  if (includeFileCache[relativePath] !== undefined) {
+    return includeFileCache[relativePath];
+  }
+
+  // do not include directories, only files
+  if (relativePath[relativePath.length - 1] === '/') {
+    return includeFileCache[relativePath] = false;
+  }
+
+  var i, l, pattern;
+
+  // Check for specific files listing
+  if (this.files) {
+    return includeFileCache[relativePath] = this.files.indexOf(relativePath) > -1;
+  }
+
+  if (this._matchedWalk) {
+    return true;
+  }
+  // Check exclude patterns
+  if (this.exclude) {
+    for (i = 0, l = this.exclude.length; i < l; i++) {
+      // An exclude pattern that returns true should be ignored
+      pattern = this.exclude[i];
+
+      if (this._matchesPattern(pattern, relativePath)) {
+        return includeFileCache[relativePath] = false;
+      }
+    }
+>>>>>>> broccoli-js/master */
   }
 
   return this._destinationPathCache[entry.relativePath] = ensureRelative(path.join(this.destDir, entry.relativePath));
